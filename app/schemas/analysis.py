@@ -1,11 +1,22 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class Position(BaseModel):
-    x: int = Field(ge=0, le=18)
-    y: int = Field(ge=0, le=18)
+    x: int
+    y: int
+
+
+class RecommendRequest(BaseModel):
+    blackStones: list[Position]
+    whiteStones: list[Position]
+    nextPlayer: Literal["BLACK", "WHITE"]
+
+
+class RecommendResponse(BaseModel):
+    bestMove: Position
+    bestWinRate: float
 
 
 class AnalyzeRequest(BaseModel):
@@ -14,9 +25,10 @@ class AnalyzeRequest(BaseModel):
     nextPlayer: Literal["BLACK", "WHITE"]
     selectedPosition: Position
 
+
 class AnalyzeResponse(BaseModel):
-    bestMove: str
-    selectedMove: str
+    bestMove: Position
+    selectedMove: Position
     bestWinRate: float
     selectedWinRate: float
     winRateLoss: float
