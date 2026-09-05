@@ -1,0 +1,72 @@
+name: Deploy AI Server
+
+on:
+    push:
+        branches:
+            - main
+
+concurrency:
+    group: solvego-ai-deploy
+    cancel-in-progress: true
+
+permissions:
+    contents: read
+
+jobs:
+    deploy:
+        runs-on: [self-hosted, solvego-ai]
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+
+            - name: Install test dependencies
+              run: |
+                  python -m pip install --upgrade pip
+                  python -m pip install -r requirements-dev.txt
+
+            - name: Run tests
+              run: |
+                  python -m pytest -v
+
+            - name: Build Docker image
+              run: |
+                  docker build -t solvego-ai:latest .
+
+            - name: Stop old container
+              run: |
+                  docker stop solvego-ai || true
+                  docker rm solvego-ai || true
+
+            - name: Start new container
+              run: |
+                  docker run -d \
+                    --name solvego-ai \
+                    --restart unless-stopped \
+                    -p 8000:8000 \
+                    -v /home/ubuntu/solvego-ai/models/model.bin.gz:/app/models/model.bin.gz:ro \
+                    -e KATAGO_MODEL_PATH=/app/models/model.bin.gz \
+                    solvego-ai:latest
+
+            - name: Health check
+              run: |
+                  for i in {1..30}; do
+                    if docker exec solvego-ai python -c \
+                      "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" \
+                      > /dev/null 2>&1; then
+                      echo "AI Server is healthy."
+                      exit 0
+                    fi
+
+                    echo "Waiting for AI Server... ($i/30)"
+                    sleep 2
+                  done
+
+                  echo "AI Server health check failed."
+                  docker logs solvego-ai
+                  exit 1

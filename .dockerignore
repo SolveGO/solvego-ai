@@ -12,5 +12,9 @@ __pycache__/
 .vscode/
 .idea/
 
+tests/
+.pytest_cache/
+requirements-dev.txt
+
 *.bin.gz
 *.log

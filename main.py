@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.analysis import router as analysis_router
+from app.api.health import router as health_router
 from app.katago.client import start_katago, stop_katago
 
 
@@ -18,8 +19,4 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 app.include_router(analysis_router)
-
-
-@app.get("/")
-def health_check():
-    return {"status": "ok"}
+app.include_router(health_router)
