@@ -1,4 +1,14 @@
+import os
 from unittest.mock import patch
+
+os.environ.setdefault(
+    "KATAGO_MODEL_PATH",
+    "dummy-model.bin",
+)
+os.environ.setdefault(
+    "KATAGO_CONFIG_PATH",
+    "dummy-analysis.cfg",
+)
 
 from app.schemas.analysis import RecommendRequest
 from app.services.analysis_service import recommend_position
