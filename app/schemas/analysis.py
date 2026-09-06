@@ -8,6 +8,14 @@ class Position(BaseModel):
     y: int
 
 
+class CandidateMove(BaseModel):
+    move: Position | None
+    winRate: float
+    scoreLead: float
+    visits: int
+    pv: list[Position | None]
+
+
 class RecommendRequest(BaseModel):
     blackStones: list[Position]
     whiteStones: list[Position]
@@ -15,8 +23,10 @@ class RecommendRequest(BaseModel):
 
 
 class RecommendResponse(BaseModel):
-    bestMove: Position
+    bestMove: Position | None
     bestWinRate: float
+    scoreLead: float
+    candidates: list[CandidateMove]
 
 
 class AnalyzeRequest(BaseModel):
@@ -27,8 +37,10 @@ class AnalyzeRequest(BaseModel):
 
 
 class AnalyzeResponse(BaseModel):
-    bestMove: Position
+    bestMove: Position | None
     selectedMove: Position
     bestWinRate: float
     selectedWinRate: float
     winRateLoss: float
+    scoreLead: float
+    candidates: list[CandidateMove]

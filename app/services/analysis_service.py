@@ -1,9 +1,51 @@
+import json
+
 from app.katago.client import analyze_with_katago
 from app.katago.coordinate import (
     to_katago_coordinate,
     from_katago_coordinate,
 )
 from app.schemas.analysis import AnalyzeRequest, RecommendRequest
+
+
+def convert_katago_move(move: str):
+    if move.lower() == "pass":
+        return None
+
+    return from_katago_coordinate(move)
+
+
+def get_player_winrate(winrate: float, player: str) -> float:
+    if player == "B":
+        return winrate
+
+    return 1 - winrate
+
+
+def get_player_score_lead(score_lead: float, player: str) -> float:
+    if player == "B":
+        return score_lead
+
+    return -score_lead
+
+
+def convert_candidate(move_info: dict, player: str) -> dict:
+    return {
+        "move": convert_katago_move(move_info["move"]),
+        "winRate": get_player_winrate(
+            move_info["winrate"],
+            player,
+        ),
+        "scoreLead": get_player_score_lead(
+            move_info["scoreLead"],
+            player,
+        ),
+        "visits": move_info["visits"],
+        "pv": [
+            convert_katago_move(move)
+            for move in move_info["pv"]
+        ],
+    }
 
 
 def build_base_query(request) -> tuple[dict, str]:
@@ -36,17 +78,12 @@ def build_base_query(request) -> tuple[dict, str]:
     return query, player
 
 
-def get_player_winrate(winrate: float, player: str) -> float:
-    if player == "B":
-        return winrate
-
-    return 1 - winrate
-
-
 def recommend_position(request: RecommendRequest) -> dict:
     query, player = build_base_query(request)
 
     result = analyze_with_katago(query)
+
+    print(json.dumps(result, indent=2))
 
     best_move_info = min(
         result["moveInfos"],
@@ -58,11 +95,23 @@ def recommend_position(request: RecommendRequest) -> dict:
         player,
     )
 
+    best_score_lead = get_player_score_lead(
+        best_move_info["scoreLead"],
+        player,
+    )
+
+    candidates = [
+        convert_candidate(move_info, player)
+        for move_info in result["moveInfos"][:3]
+    ]
+
     return {
-        "bestMove": from_katago_coordinate(
+        "bestMove": convert_katago_move(
             best_move_info["move"]
         ),
         "bestWinRate": best_quality,
+        "scoreLead": best_score_lead,
+        "candidates": candidates,
     }
 
 
@@ -75,6 +124,8 @@ def analyze_position(request: AnalyzeRequest) -> dict:
 
     # 1. 현재 포지션 전체 분석
     result = analyze_with_katago(query)
+
+    print(json.dumps(result, indent=2))
 
     # KataGo가 판단한 최선수
     best_move_info = min(
@@ -128,12 +179,26 @@ def analyze_position(request: AnalyzeRequest) -> dict:
         best_quality - selected_quality,
     )
 
+    # 6. 현재 플레이어 관점으로 예상 집 차이 변환
+    best_score_lead = get_player_score_lead(
+        best_move_info["scoreLead"],
+        player,
+    )
+
+    # 7. KataGo 후보 중 상위 3개만 반환
+    candidates = [
+        convert_candidate(move_info, player)
+        for move_info in result["moveInfos"][:3]
+    ]
+
     return {
-        "bestMove": from_katago_coordinate(
+        "bestMove": convert_katago_move(
             best_move_info["move"]
         ),
         "selectedMove": request.selectedPosition,
         "bestWinRate": best_quality,
         "selectedWinRate": selected_quality,
         "winRateLoss": win_rate_loss,
+        "scoreLead": best_score_lead,
+        "candidates": candidates,
     }
