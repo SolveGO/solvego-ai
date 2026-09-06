@@ -44,3 +44,18 @@ class AnalyzeResponse(BaseModel):
     winRateLoss: float
     scoreLead: float
     candidates: list[CandidateMove]
+
+
+class GameMove(BaseModel):
+    player: Literal["BLACK", "WHITE"]
+    position: Position | None
+
+
+class GameNextMoveRequest(BaseModel):
+    moves: list[GameMove]
+
+
+class GameNextMoveResponse(BaseModel):
+    move: Position | None
+    winRate: float
+    scoreLead: float

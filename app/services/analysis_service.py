@@ -5,7 +5,11 @@ from app.katago.coordinate import (
     to_katago_coordinate,
     from_katago_coordinate,
 )
-from app.schemas.analysis import AnalyzeRequest, RecommendRequest
+from app.schemas.analysis import (
+    AnalyzeRequest,
+    GameNextMoveRequest,
+    RecommendRequest,
+)
 
 
 def convert_katago_move(move: str):
@@ -72,6 +76,39 @@ def build_base_query(request) -> tuple[dict, str]:
         "boardXSize": 19,
         "boardYSize": 19,
         "analyzeTurns": [0],
+        "maxVisits": 5,
+    }
+
+    return query, player
+
+
+def build_game_query(request: GameNextMoveRequest) -> tuple[dict, str]:
+    moves = []
+
+    for move in request.moves:
+        player = "B" if move.player == "BLACK" else "W"
+
+        if move.position is None:
+            coordinate = "pass"
+        else:
+            coordinate = to_katago_coordinate(
+                move.position
+            )
+
+        moves.append([player, coordinate])
+
+    # 흑부터 시작하므로, 현재까지 둔 수를 기준으로 다음 차례 계산
+    player = "B" if len(request.moves) % 2 == 0 else "W"
+
+    query = {
+        "initialStones": [],
+        "initialPlayer": "B",
+        "moves": moves,
+        "rules": "korean",
+        "komi": 6.5,
+        "boardXSize": 19,
+        "boardYSize": 19,
+        "analyzeTurns": [len(moves)],
         "maxVisits": 5,
     }
 
@@ -201,4 +238,31 @@ def analyze_position(request: AnalyzeRequest) -> dict:
         "winRateLoss": win_rate_loss,
         "scoreLead": best_score_lead,
         "candidates": candidates,
+    }
+
+
+def game_next_move(request: GameNextMoveRequest) -> dict:
+    query, player = build_game_query(request)
+
+    result = analyze_with_katago(query)
+
+    print(json.dumps(result, indent=2))
+
+    best_move_info = min(
+        result["moveInfos"],
+        key=lambda move: move["order"],
+    )
+
+    return {
+        "move": convert_katago_move(
+            best_move_info["move"]
+        ),
+        "winRate": get_player_winrate(
+            best_move_info["winrate"],
+            player,
+        ),
+        "scoreLead": get_player_score_lead(
+            best_move_info["scoreLead"],
+            player,
+        ),
     }
