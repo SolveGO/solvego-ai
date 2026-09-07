@@ -88,7 +88,7 @@ def build_game_query(request: GameNextMoveRequest) -> tuple[dict, str]:
     for move in request.moves:
         player = "B" if move.player == "BLACK" else "W"
 
-        if move.position is None:
+        if move.moveType == "PASS":
             coordinate = "pass"
         else:
             coordinate = to_katago_coordinate(
@@ -113,7 +113,6 @@ def build_game_query(request: GameNextMoveRequest) -> tuple[dict, str]:
     }
 
     return query, player
-
 
 def recommend_position(request: RecommendRequest) -> dict:
     query, player = build_base_query(request)
@@ -253,10 +252,15 @@ def game_next_move(request: GameNextMoveRequest) -> dict:
         key=lambda move: move["order"],
     )
 
+    best_move = best_move_info["move"]
+
     return {
-        "move": convert_katago_move(
-            best_move_info["move"]
+        "moveType": (
+            "PASS"
+            if best_move.lower() == "pass"
+            else "PLAY"
         ),
+        "move": convert_katago_move(best_move),
         "winRate": get_player_winrate(
             best_move_info["winrate"],
             player,

@@ -68,14 +68,17 @@ def test_game_next_move_converts_history_and_pass():
         moves=[
             GameMove(
                 player="BLACK",
+                moveType="PLAY",
                 position=Position(x=3, y=15),
             ),
             GameMove(
                 player="WHITE",
+                moveType="PLAY",
                 position=Position(x=15, y=3),
             ),
             GameMove(
                 player="BLACK",
+                moveType="PASS",
                 position=None,
             ),
         ]
@@ -112,6 +115,7 @@ def test_game_next_move_converts_history_and_pass():
     assert query["analyzeTurns"] == [3]
 
     # 다음 차례는 WHITE이므로 WHITE 관점으로 변환
+    assert result["moveType"] == "PLAY"
     assert result["move"] == Position(x=3, y=3)
     assert result["winRate"] == 0.6
     assert result["scoreLead"] == 2.5
@@ -122,6 +126,7 @@ def test_game_next_move_when_katago_returns_pass():
         moves=[
             GameMove(
                 player="BLACK",
+                moveType="PLAY",
                 position=Position(x=3, y=15),
             ),
         ]
@@ -147,6 +152,7 @@ def test_game_next_move_when_katago_returns_pass():
         result = game_next_move(request)
 
     # 다음 차례는 WHITE
+    assert result["moveType"] == "PASS"
     assert result["move"] is None
     assert result["winRate"] == 0.8
     assert result["scoreLead"] == 10.5

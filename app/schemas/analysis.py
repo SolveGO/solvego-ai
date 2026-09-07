@@ -48,6 +48,7 @@ class AnalyzeResponse(BaseModel):
 
 class GameMove(BaseModel):
     player: Literal["BLACK", "WHITE"]
+    moveType: Literal["PLAY", "PASS"]
     position: Position | None
 
 
@@ -56,6 +57,7 @@ class GameNextMoveRequest(BaseModel):
 
 
 class GameNextMoveResponse(BaseModel):
+    moveType: Literal["PLAY", "PASS"]
     move: Position | None
     winRate: float
     scoreLead: float
