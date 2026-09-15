@@ -10,6 +10,8 @@ from app.schemas.analysis import (
     GameNextMoveRequest,
     RecommendRequest,
 )
+from app.config import EXPLANATION_PV_MAX_MOVES
+from app.services.evidence_service import create_evidence_token
 
 
 def convert_katago_move(move: str):
@@ -33,9 +35,18 @@ def get_player_score_lead(score_lead: float, player: str) -> float:
     return -score_lead
 
 
-def convert_candidate(move_info: dict, player: str) -> dict:
+def convert_candidate(
+    move_info: dict,
+    player: str,
+    rank: int | None = None,
+    pv_limit: int | None = None,
+) -> dict:
+    converted_move = convert_katago_move(move_info["move"])
     return {
-        "move": convert_katago_move(move_info["move"]),
+        "id": f"c{rank}" if rank is not None else "c1",
+        "rank": rank or 1,
+        "moveType": "PASS" if converted_move is None else "PLAY",
+        "move": converted_move,
         "winRate": get_player_winrate(
             move_info["winrate"],
             player,
@@ -47,7 +58,11 @@ def convert_candidate(move_info: dict, player: str) -> dict:
         "visits": move_info["visits"],
         "pv": [
             convert_katago_move(move)
-            for move in move_info["pv"]
+            for move in (
+                move_info["pv"]
+                if pv_limit is None
+                else move_info["pv"][:pv_limit]
+            )
         ],
     }
 
@@ -121,10 +136,8 @@ def recommend_position(request: RecommendRequest) -> dict:
 
     print(json.dumps(result, indent=2))
 
-    best_move_info = min(
-        result["moveInfos"],
-        key=lambda move: move["order"],
-    )
+    sorted_move_infos = sorted(result["moveInfos"], key=lambda move: move["order"])
+    best_move_info = sorted_move_infos[0]
 
     best_quality = get_player_winrate(
         best_move_info["winrate"],
@@ -137,8 +150,8 @@ def recommend_position(request: RecommendRequest) -> dict:
     )
 
     candidates = [
-        convert_candidate(move_info, player)
-        for move_info in result["moveInfos"][:3]
+        convert_candidate(move_info, player, rank)
+        for rank, move_info in enumerate(sorted_move_infos[:3], start=1)
     ]
 
     return {
@@ -164,10 +177,8 @@ def analyze_position(request: AnalyzeRequest) -> dict:
     print(json.dumps(result, indent=2))
 
     # KataGo가 판단한 최선수
-    best_move_info = min(
-        result["moveInfos"],
-        key=lambda move: move["order"],
-    )
+    sorted_move_infos = sorted(result["moveInfos"], key=lambda move: move["order"])
+    best_move_info = sorted_move_infos[0]
 
     # 2. 사용자가 선택한 수가 기존 분석 결과에 있는지 확인
     selected_move_info = None
@@ -223,8 +234,8 @@ def analyze_position(request: AnalyzeRequest) -> dict:
 
     # 7. KataGo 후보 중 상위 3개만 반환
     candidates = [
-        convert_candidate(move_info, player)
-        for move_info in result["moveInfos"][:3]
+        convert_candidate(move_info, player, rank)
+        for rank, move_info in enumerate(sorted_move_infos[:3], start=1)
     ]
 
     return {
@@ -247,12 +258,18 @@ def game_next_move(request: GameNextMoveRequest) -> dict:
 
     print(json.dumps(result, indent=2))
 
-    best_move_info = min(
-        result["moveInfos"],
-        key=lambda move: move["order"],
-    )
+    sorted_move_infos = sorted(result["moveInfos"], key=lambda move: move["order"])
+    best_move_info = sorted_move_infos[0]
 
     best_move = best_move_info["move"]
+
+    candidates = [
+        convert_candidate(
+            move_info, player, rank, EXPLANATION_PV_MAX_MOVES
+        )
+        for rank, move_info in enumerate(sorted_move_infos[:3], start=1)
+    ]
+    perspective = "BLACK" if player == "B" else "WHITE"
 
     return {
         "moveType": (
@@ -269,4 +286,6 @@ def game_next_move(request: GameNextMoveRequest) -> dict:
             best_move_info["scoreLead"],
             player,
         ),
+        "candidates": candidates,
+        "evidenceToken": create_evidence_token(perspective, candidates),
     }

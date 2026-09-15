@@ -302,13 +302,38 @@ KataGo stdout
 
 # Configuration
 
-AI 서버는 다음 환경변수를 사용합니다.
+애플리케이션은 local과 production에서 동일한 환경변수 계약을 사용합니다.
+local에서는 저장소 루트의 `.env`에 값을 넣고, production에서는 Docker,
+EC2 환경변수 또는 GitHub Secrets를 통해 같은 이름으로 주입합니다. 코드에는
+환경별 분기나 비밀값 생성 fallback이 없습니다. 외부에서 이미 주입된 값은
+`.env`보다 우선합니다.
 
-```bash
-KATAGO_MODEL_PATH=/models/model.bin.gz
+```ini
+OPENAI_API_KEY=
+OPENAI_MODEL=
+OPENAI_TIMEOUT_SECONDS=5
+
+EXPLANATION_TOKEN_SECRET=
+EXPLANATION_TOKEN_TTL_SECONDS=600
+EXPLANATION_PV_MAX_MOVES=8
 ```
 
-KataGo 실행 파일과 설정 파일의 경로는 애플리케이션 설정을 통해 관리됩니다.
+`OPENAI_API_KEY`와 `EXPLANATION_TOKEN_SECRET`은 필수입니다. 값이 없거나
+빈 문자열이면 애플리케이션 시작 시 누락된 변수 이름과 함께 설정 오류가
+발생합니다. `.env`는 Git과 Docker build context에서 제외되며,
+`.env.example`에는 비밀값 없이 같은 구조만 제공합니다.
+
+`OPENAI_MODEL`이 없거나 LLM 호출이 실패하면 서명된 KataGo 근거만 사용한
+템플릿 해설을 반환합니다. 여러 AI 서버 인스턴스는 반드시 같은
+`EXPLANATION_TOKEN_SECRET`을 사용해야 합니다.
+
+기존 KataGo 설정도 환경변수로 주입합니다.
+
+```ini
+KATAGO_MODEL_PATH=/models/model.bin.gz
+KATAGO_CONFIG_PATH=/app/katago/analysis.cfg
+KATAGO_PATH=/usr/local/bin/katago
+```
 
 
 
@@ -337,8 +362,17 @@ docker run -d \
   -p 8000:8000 \
   -v /home/ubuntu/solvego-ai/models/model.bin.gz:/models/model.bin.gz:ro \
   -e KATAGO_MODEL_PATH=/models/model.bin.gz \
+  -e OPENAI_API_KEY \
+  -e OPENAI_MODEL \
+  -e OPENAI_TIMEOUT_SECONDS=5 \
+  -e EXPLANATION_TOKEN_SECRET \
+  -e EXPLANATION_TOKEN_TTL_SECONDS=600 \
+  -e EXPLANATION_PV_MAX_MOVES=8 \
   solvego-ai
 ```
+
+위 예시는 shell 또는 배포 환경에 이미 설정된 비밀값을 컨테이너에 전달하며,
+명령이나 이미지에 실제 API key와 secret을 기록하지 않습니다.
 
 
 
@@ -418,5 +452,3 @@ AI 평가
 * AI 요청 timeout 및 fallback 처리
 * 분석 결과 모니터링
 * AI 서버 CI/CD 자동화
-
-

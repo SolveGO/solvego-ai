@@ -16,6 +16,12 @@ class CandidateMove(BaseModel):
     pv: list[Position | None]
 
 
+class GameCandidateMove(CandidateMove):
+    id: str
+    rank: int
+    moveType: Literal["PLAY", "PASS"]
+
+
 class RecommendRequest(BaseModel):
     blackStones: list[Position]
     whiteStones: list[Position]
@@ -61,3 +67,5 @@ class GameNextMoveResponse(BaseModel):
     move: Position | None
     winRate: float
     scoreLead: float
+    candidates: list[GameCandidateMove]
+    evidenceToken: str
