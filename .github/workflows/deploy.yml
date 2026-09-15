@@ -69,6 +69,12 @@ jobs:
                     -p 8000:8000 \
                     -v /home/ubuntu/solvego-ai/models/model.bin.gz:/app/models/model.bin.gz:ro \
                     -e KATAGO_MODEL_PATH=/app/models/model.bin.gz \
+                    -e OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+                    -e EXPLANATION_TOKEN_SECRET="${{ secrets.EXPLANATION_TOKEN_SECRET }}" \
+                    -e OPENAI_MODEL=gpt-5.6-luna \
+                    -e OPENAI_TIMEOUT_SECONDS=5 \
+                    -e EXPLANATION_TOKEN_TTL_SECONDS=600 \
+                    -e EXPLANATION_PV_MAX_MOVES=8 \
                     solvego-ai:${{ github.sha }}
 
     health-check:
