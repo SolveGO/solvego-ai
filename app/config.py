@@ -56,7 +56,7 @@ CONFIG_PATH = os.environ["KATAGO_CONFIG_PATH"]
 OPENAI_API_KEY = required_environment_variable("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL")
 OPENAI_TIMEOUT_SECONDS = positive_float_environment_variable(
-    "OPENAI_TIMEOUT_SECONDS", "5"
+    "OPENAI_TIMEOUT_SECONDS", "15"
 )
 EXPLANATION_TOKEN_SECRET = required_environment_variable(
     "EXPLANATION_TOKEN_SECRET"

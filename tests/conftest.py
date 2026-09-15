@@ -6,7 +6,7 @@ import os
 os.environ.setdefault("OPENAI_API_KEY", "test-api-key")
 os.environ.setdefault("OPENAI_MODEL", "test-model")
 os.environ.setdefault("EXPLANATION_TOKEN_SECRET", "test-explanation-token-secret")
-os.environ.setdefault("OPENAI_TIMEOUT_SECONDS", "5")
+os.environ.setdefault("OPENAI_TIMEOUT_SECONDS", "15")
 os.environ.setdefault("EXPLANATION_TOKEN_TTL_SECONDS", "600")
 os.environ.setdefault("EXPLANATION_PV_MAX_MOVES", "8")
 os.environ.setdefault("KATAGO_MODEL_PATH", "dummy-model.bin")

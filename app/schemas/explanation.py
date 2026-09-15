@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas.analysis import GameCandidateMove
 
@@ -10,7 +10,7 @@ class ExplanationRequest(BaseModel):
 
 
 class ExplanationText(BaseModel):
-    summary: str
+    summary: str = Field(min_length=1)
     comparison: str
     pvExplanation: str
     limitation: str

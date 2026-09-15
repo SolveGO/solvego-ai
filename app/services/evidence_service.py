@@ -4,10 +4,13 @@ import hmac
 import json
 import time
 
+from pydantic import ValidationError
+
 from app.config import (
     EXPLANATION_TOKEN_SECRET,
     EXPLANATION_TOKEN_TTL_SECONDS,
 )
+from app.schemas.analysis import GameCandidateMove, GameMove, Position
 
 
 class InvalidEvidenceToken(ValueError):
@@ -34,7 +37,7 @@ def create_evidence_token(
         "candidates": candidates,
         "boardState": board_state,
         "limitations": [
-            "분석량이 적어 해석에는 오차가 있을 수 있습니다.",
+            "후보 평가는 제한된 분석량을 바탕으로 하므로 작은 수치 차이를 과도하게 해석하지 않습니다.",
             "PV는 가능한 예상 진행의 한 예이며 강제 수순이 아닙니다.",
             "바둑적 의도는 현재 판과 후보 수를 바탕으로 한 가능성 있는 해석입니다.",
         ],
@@ -74,6 +77,18 @@ def verify_evidence_token(token: str) -> dict:
     candidates = payload.get("candidates")
     if not isinstance(candidates, list) or not 1 <= len(candidates) <= 3:
         raise InvalidEvidenceToken("Invalid evidence candidates")
+    try:
+        validated_candidates = [
+            GameCandidateMove.model_validate(candidate)
+            for candidate in candidates
+        ]
+    except ValidationError as error:
+        raise InvalidEvidenceToken("Invalid evidence candidates") from error
+    if any(
+        candidate.id != f"c{index}" or candidate.rank != index
+        for index, candidate in enumerate(validated_candidates, start=1)
+    ):
+        raise InvalidEvidenceToken("Invalid evidence candidate ranking")
     board_state = payload.get("boardState")
     if board_state is not None:
         if (
@@ -85,4 +100,24 @@ def verify_evidence_token(token: str) -> dict:
             or not isinstance(board_state.get("moves"), list)
         ):
             raise InvalidEvidenceToken("Invalid evidence board state")
+        try:
+            for stone in board_state["blackStones"] + board_state["whiteStones"]:
+                position = Position.model_validate(stone)
+                if not (0 <= position.x < 19 and 0 <= position.y < 19):
+                    raise ValueError("Position is outside the board")
+            [GameMove.model_validate(move) for move in board_state["moves"]]
+        except (ValidationError, ValueError) as error:
+            raise InvalidEvidenceToken("Invalid evidence board state") from error
+        diagram = board_state.get("diagram")
+        if diagram is not None and (
+            not isinstance(diagram, list)
+            or len(diagram) != 19
+            or any(
+                not isinstance(row, str)
+                or len(row) != 19
+                or not set(row).issubset({".", "X", "O"})
+                for row in diagram
+            )
+        ):
+            raise InvalidEvidenceToken("Invalid evidence board diagram")
     return payload

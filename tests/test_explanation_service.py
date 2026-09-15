@@ -65,7 +65,9 @@ def test_explanation_reuses_signed_evidence_without_katago():
     katago.assert_not_called()
     assert result["source"] == "LLM"
     assert result["explanation"].evidenceRefs == ["c1"]
-    assert result["explanation"].limitation == "분석량이 적어 해석에는 오차가 있을 수 있습니다."
+    assert result["explanation"].limitation == (
+        "AI 해설은 현재 판을 바탕으로 한 해석이며 실제 의도와 다를 수 있습니다."
+    )
 
 
 def test_explanation_falls_back_for_unknown_evidence_reference():
@@ -105,10 +107,34 @@ def test_explanation_passes_signed_board_state_to_llm():
 
     llm_input = request.call_args.args[0]
     assert llm_input["boardState"] == state
+    assert llm_input["selectedCandidate"] == candidate()
+    assert llm_input["perspective"] == "BLACK"
     assert result["source"] == "LLM"
 
 
-def test_explanation_falls_back_for_unhedged_certain_claim():
+def test_normal_go_inference_is_not_rejected_for_lacking_fixed_hedge_phrase():
+    token = create_evidence_token("BLACK", [candidate()], board_state())
+    output = {
+        "summary": (
+            "상대의 탈출 방향을 막으면서 공격을 이어가려는 수입니다. "
+            "공격 과정에서 주변 흑돌도 자연스럽게 강하게 만듭니다."
+        ),
+        "comparison": "",
+        "pvExplanation": "상대의 응수 뒤에도 공격을 계속하는 흐름입니다.",
+        "limitation": "해석에는 오차가 있을 수 있습니다.",
+        "evidenceRefs": ["c1"],
+    }
+    with patch(
+        "app.services.explanation_service.request_explanation",
+        return_value=output,
+    ):
+        result = explain(token)
+
+    assert result["source"] == "LLM"
+    assert "탈출 방향" in result["explanation"].summary
+
+
+def test_explanation_softens_overconfident_claim_without_discarding_response():
     token = create_evidence_token("BLACK", [candidate()], board_state())
     output = {
         "summary": "A 후보로 백 대마가 반드시 잡힙니다.",
@@ -123,8 +149,10 @@ def test_explanation_falls_back_for_unhedged_certain_claim():
     ):
         result = explain(token)
 
-    assert result["source"] == "TEMPLATE"
-    assert "maxVisits" not in result["explanation"].limitation
+    assert result["source"] == "LLM"
+    assert "반드시" not in result["explanation"].summary
+    assert "잡힐 가능성이 있습니다" in result["explanation"].summary
+    assert "강제 수순" not in result["explanation"].pvExplanation
 
 
 def test_explanation_falls_back_when_llm_fails():
@@ -177,3 +205,12 @@ def test_evidence_token_rejects_expiration():
     with patch("app.services.evidence_service.time.time", return_value=10_000):
         with pytest.raises(InvalidEvidenceToken):
             verify_evidence_token(token)
+
+
+def test_evidence_token_rejects_malformed_token_and_candidate_structure():
+    with pytest.raises(InvalidEvidenceToken):
+        verify_evidence_token("not-an-evidence-token")
+
+    token = create_evidence_token("BLACK", [{"id": "c1"}])
+    with pytest.raises(InvalidEvidenceToken):
+        verify_evidence_token(token)

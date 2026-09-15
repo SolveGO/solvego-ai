@@ -61,6 +61,12 @@ def build_board_state(moves: list[GameMove], side_to_move: str) -> dict:
             if not _has_liberty(opponent_group, own | opponent):
                 opponent.difference_update(opponent_group)
 
+    diagram = [["." for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
+    for x, y in black:
+        diagram[y][x] = "X"
+    for x, y in white:
+        diagram[y][x] = "O"
+
     return {
         "boardSize": BOARD_SIZE,
         "sideToMove": side_to_move,
@@ -70,5 +76,6 @@ def build_board_state(moves: list[GameMove], side_to_move: str) -> dict:
         "whiteStones": [
             {"x": x, "y": y} for x, y in sorted(white, key=lambda item: (item[1], item[0]))
         ],
+        "diagram": ["".join(row) for row in diagram],
         "moves": [move.model_dump() for move in moves],
     }

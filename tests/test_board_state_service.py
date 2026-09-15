@@ -22,6 +22,8 @@ def test_build_board_state_includes_full_history_and_pass():
     assert state["blackStones"] == [{"x": 3, "y": 3}]
     assert state["whiteStones"] == []
     assert state["moves"] == [move.model_dump() for move in moves]
+    assert state["diagram"][3][3] == "X"
+    assert all(len(row) == 19 for row in state["diagram"])
 
 
 def test_build_board_state_removes_captured_stones():
@@ -35,3 +37,4 @@ def test_build_board_state_removes_captured_stones():
 
     assert state["blackStones"] == [{"x": 1, "y": 0}, {"x": 0, "y": 1}]
     assert state["whiteStones"] == []
+    assert state["diagram"][0][0] == "."

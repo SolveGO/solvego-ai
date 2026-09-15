@@ -128,13 +128,17 @@ def test_game_next_move_converts_history_and_pass():
     assert result["candidates"][0]["scoreLead"] == 2.5
     assert result["evidenceToken"]
     evidence = verify_evidence_token(result["evidenceToken"])
-    assert evidence["boardState"] == {
-        "boardSize": 19,
-        "sideToMove": "WHITE",
-        "blackStones": [{"x": 3, "y": 15}],
-        "whiteStones": [{"x": 15, "y": 3}],
-        "moves": [move.model_dump(mode="json") for move in request.moves],
-    }
+    board_state = evidence["boardState"]
+    assert board_state["boardSize"] == 19
+    assert board_state["sideToMove"] == "WHITE"
+    assert board_state["blackStones"] == [{"x": 3, "y": 15}]
+    assert board_state["whiteStones"] == [{"x": 15, "y": 3}]
+    assert board_state["moves"] == [
+        move.model_dump(mode="json") for move in request.moves
+    ]
+    assert len(board_state["diagram"]) == 19
+    assert board_state["diagram"][15][3] == "X"
+    assert board_state["diagram"][3][15] == "O"
 
 
 def test_game_next_move_when_katago_returns_pass():

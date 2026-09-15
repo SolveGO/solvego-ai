@@ -72,7 +72,7 @@ jobs:
                     -e OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
                     -e EXPLANATION_TOKEN_SECRET="${{ secrets.EXPLANATION_TOKEN_SECRET }}" \
                     -e OPENAI_MODEL=gpt-5.6-luna \
-                    -e OPENAI_TIMEOUT_SECONDS=5 \
+                    -e OPENAI_TIMEOUT_SECONDS=15 \
                     -e EXPLANATION_TOKEN_TTL_SECONDS=600 \
                     -e EXPLANATION_PV_MAX_MOVES=8 \
                     solvego-ai:${{ github.sha }}
