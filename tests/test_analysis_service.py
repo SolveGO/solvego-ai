@@ -20,6 +20,7 @@ from app.services.analysis_service import (
     game_next_move,
     recommend_position,
 )
+from app.services.evidence_service import verify_evidence_token
 
 
 def test_recommend_position_when_katago_returns_pass():
@@ -126,6 +127,14 @@ def test_game_next_move_converts_history_and_pass():
     assert result["candidates"][0]["winRate"] == 0.6
     assert result["candidates"][0]["scoreLead"] == 2.5
     assert result["evidenceToken"]
+    evidence = verify_evidence_token(result["evidenceToken"])
+    assert evidence["boardState"] == {
+        "boardSize": 19,
+        "sideToMove": "WHITE",
+        "blackStones": [{"x": 3, "y": 15}],
+        "whiteStones": [{"x": 15, "y": 3}],
+        "moves": [move.model_dump(mode="json") for move in request.moves],
+    }
 
 
 def test_game_next_move_when_katago_returns_pass():

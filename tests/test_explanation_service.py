@@ -24,10 +24,31 @@ def candidate(candidate_id="c1", rank=1):
     }
 
 
+def board_state(side_to_move="BLACK"):
+    return {
+        "boardSize": 19,
+        "sideToMove": side_to_move,
+        "blackStones": [{"x": 3, "y": 3}],
+        "whiteStones": [{"x": 15, "y": 15}],
+        "moves": [
+            {
+                "player": "BLACK",
+                "moveType": "PLAY",
+                "position": {"x": 3, "y": 3},
+            },
+            {
+                "player": "WHITE",
+                "moveType": "PLAY",
+                "position": {"x": 15, "y": 15},
+            },
+        ],
+    }
+
+
 def test_explanation_reuses_signed_evidence_without_katago():
-    token = create_evidence_token("BLACK", [candidate()])
+    token = create_evidence_token("BLACK", [candidate()], board_state())
     output = {
-        "summary": "이번 KataGo 분석에서는 A 후보가 가장 높은 평가를 받았습니다.",
+        "summary": "A 후보는 우변을 넓게 쓰려는 의도로 볼 수 있습니다.",
         "comparison": "비교할 다른 후보가 없습니다.",
         "pvExplanation": "PV는 가능한 예상 진행의 한 예입니다.",
         "limitation": "낮은 탐색량의 결과입니다.",
@@ -44,6 +65,7 @@ def test_explanation_reuses_signed_evidence_without_katago():
     katago.assert_not_called()
     assert result["source"] == "LLM"
     assert result["explanation"].evidenceRefs == ["c1"]
+    assert result["explanation"].limitation == "분석량이 적어 해석에는 오차가 있을 수 있습니다."
 
 
 def test_explanation_falls_back_for_unknown_evidence_reference():
@@ -63,6 +85,46 @@ def test_explanation_falls_back_for_unknown_evidence_reference():
 
     assert result["source"] == "TEMPLATE"
     assert result["explanation"].evidenceRefs == ["c1"]
+
+
+def test_explanation_passes_signed_board_state_to_llm():
+    state = board_state()
+    token = create_evidence_token("BLACK", [candidate()], state)
+    output = {
+        "summary": "A 후보는 우변을 넓게 쓰려는 의도로 볼 수 있습니다.",
+        "comparison": "비교할 다른 후보가 없습니다.",
+        "pvExplanation": "PV는 가능한 진행입니다.",
+        "limitation": "임의 한계 문구",
+        "evidenceRefs": ["c1"],
+    }
+    with patch(
+        "app.services.explanation_service.request_explanation",
+        return_value=output,
+    ) as request:
+        result = explain(token)
+
+    llm_input = request.call_args.args[0]
+    assert llm_input["boardState"] == state
+    assert result["source"] == "LLM"
+
+
+def test_explanation_falls_back_for_unhedged_certain_claim():
+    token = create_evidence_token("BLACK", [candidate()], board_state())
+    output = {
+        "summary": "A 후보로 백 대마가 반드시 잡힙니다.",
+        "comparison": "A 후보가 최선입니다.",
+        "pvExplanation": "PV는 강제 수순입니다.",
+        "limitation": "낮은 분석량입니다.",
+        "evidenceRefs": ["c1"],
+    }
+    with patch(
+        "app.services.explanation_service.request_explanation",
+        return_value=output,
+    ):
+        result = explain(token)
+
+    assert result["source"] == "TEMPLATE"
+    assert "maxVisits" not in result["explanation"].limitation
 
 
 def test_explanation_falls_back_when_llm_fails():

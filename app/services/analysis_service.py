@@ -12,6 +12,7 @@ from app.schemas.analysis import (
 )
 from app.config import EXPLANATION_PV_MAX_MOVES
 from app.services.evidence_service import create_evidence_token
+from app.services.board_state_service import build_board_state
 
 
 def convert_katago_move(move: str):
@@ -270,6 +271,7 @@ def game_next_move(request: GameNextMoveRequest) -> dict:
         for rank, move_info in enumerate(sorted_move_infos[:3], start=1)
     ]
     perspective = "BLACK" if player == "B" else "WHITE"
+    board_state = build_board_state(request.moves, perspective)
 
     return {
         "moveType": (
@@ -287,5 +289,7 @@ def game_next_move(request: GameNextMoveRequest) -> dict:
             player,
         ),
         "candidates": candidates,
-        "evidenceToken": create_evidence_token(perspective, candidates),
+        "evidenceToken": create_evidence_token(
+            perspective, candidates, board_state
+        ),
     }

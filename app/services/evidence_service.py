@@ -22,16 +22,21 @@ def _decode(value: str) -> bytes:
     return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
 
 
-def create_evidence_token(perspective: str, candidates: list[dict]) -> str:
+def create_evidence_token(
+    perspective: str,
+    candidates: list[dict],
+    board_state: dict | None = None,
+) -> str:
     payload = {
         "version": 1,
         "expiresAt": int(time.time()) + EXPLANATION_TOKEN_TTL_SECONDS,
         "perspective": perspective,
         "candidates": candidates,
+        "boardState": board_state,
         "limitations": [
-            "KataGo maxVisits=5의 낮은 탐색량 분석입니다.",
+            "분석량이 적어 해석에는 오차가 있을 수 있습니다.",
             "PV는 가능한 예상 진행의 한 예이며 강제 수순이 아닙니다.",
-            "제공된 데이터만으로 구체적인 전술적 이유를 확인할 수 없습니다.",
+            "바둑적 의도는 현재 판과 후보 수를 바탕으로 한 가능성 있는 해석입니다.",
         ],
     }
     encoded = _encode(
@@ -69,4 +74,15 @@ def verify_evidence_token(token: str) -> dict:
     candidates = payload.get("candidates")
     if not isinstance(candidates, list) or not 1 <= len(candidates) <= 3:
         raise InvalidEvidenceToken("Invalid evidence candidates")
+    board_state = payload.get("boardState")
+    if board_state is not None:
+        if (
+            not isinstance(board_state, dict)
+            or board_state.get("boardSize") != 19
+            or board_state.get("sideToMove") != payload["perspective"]
+            or not isinstance(board_state.get("blackStones"), list)
+            or not isinstance(board_state.get("whiteStones"), list)
+            or not isinstance(board_state.get("moves"), list)
+        ):
+            raise InvalidEvidenceToken("Invalid evidence board state")
     return payload

@@ -1,4 +1,3 @@
-import re
 import logging
 
 from app.llm.client import request_explanation
@@ -7,9 +6,23 @@ from app.schemas.explanation import ExplanationText
 from app.services.evidence_service import verify_evidence_token
 
 
-FORBIDDEN_TACTICAL_TERMS = {
-    "축", "사활", "포획", "잡", "연결", "선수", "영토", "확정", "강제"
+HEDGED_INTERPRETATION_MARKERS = {
+    "볼 수 있습니다",
+    "해석할 수 있습니다",
+    "가능성이 있습니다",
+    "것으로 보입니다",
+    "의도로 보입니다",
 }
+UNSUPPORTED_CERTAINTY_MARKERS = {
+    "반드시",
+    "무조건",
+    "확실히",
+    "확정됩니다",
+    "강제 수순",
+    "죽어 있습니다",
+    "잡힙니다",
+}
+LIMITATION_TEXT = "분석량이 적어 해석에는 오차가 있을 수 있습니다."
 logger = logging.getLogger(__name__)
 COLUMNS = "ABCDEFGHJKLMNOPQRST"
 
@@ -26,12 +39,6 @@ def _position(candidate: GameCandidateMove) -> str:
 
 def build_template(candidates: list[GameCandidateMove]) -> ExplanationText:
     best = candidates[0]
-    comparisons = [
-        f"{_label(candidate.rank)} 후보 {_position(candidate)}는 "
-        f"예상 승률 {candidate.winRate * 100:.1f}%, "
-        f"예상 집 차이 {candidate.scoreLead:+.1f}집입니다."
-        for candidate in candidates
-    ]
     pv = best.pv
     pv_text = " → ".join(
         "PASS" if move is None else f"{COLUMNS[move.x]}{19 - move.y}"
@@ -42,15 +49,15 @@ def build_template(candidates: list[GameCandidateMove]) -> ExplanationText:
             f"이번 KataGo 분석에서는 A 후보 {_position(best)}가 "
             "가장 높은 평가를 받았습니다."
         ),
-        comparison=" ".join(comparisons),
+        comparison=(
+            "바둑적 의도를 설명하는 자동 해설을 불러오지 못했습니다. "
+            "후보별 수치는 위 카드에서 비교할 수 있습니다."
+        ),
         pvExplanation=(
             f"A 후보의 가능한 예상 진행 한 예는 {pv_text}입니다."
             if pv else "A 후보에 제공된 예상 진행이 없습니다."
         ),
-        limitation=(
-            "maxVisits=5의 낮은 탐색량 결과이므로 확정적인 판단으로 볼 수 없으며, "
-            "제공된 데이터만으로 구체적인 전술적 이유는 확인할 수 없습니다."
-        ),
+        limitation=LIMITATION_TEXT,
         evidenceRefs=[candidate.id for candidate in candidates],
     )
 
@@ -61,17 +68,16 @@ def _validate_llm_output(output: dict, candidate_ids: set[str]) -> ExplanationTe
     if (not refs or len(refs) != len(explanation.evidenceRefs)
             or not refs.issubset(candidate_ids)):
         raise ValueError("Unknown evidence reference")
-    combined = " ".join([
+    narrative = " ".join([
         explanation.summary,
         explanation.comparison,
         explanation.pvExplanation,
-        explanation.limitation,
     ])
-    if any(term in combined for term in FORBIDDEN_TACTICAL_TERMS):
-        raise ValueError("Unsupported tactical claim")
-    if re.search(r"\d", combined):
-        raise ValueError("Unverified numeric claim")
-    return explanation
+    if not any(marker in narrative for marker in HEDGED_INTERPRETATION_MARKERS):
+        raise ValueError("Go interpretation must be expressed as uncertain")
+    if any(marker in narrative for marker in UNSUPPORTED_CERTAINTY_MARKERS):
+        raise ValueError("Unsupported certain claim")
+    return explanation.model_copy(update={"limitation": LIMITATION_TEXT})
 
 
 def explain(evidence_token: str) -> dict:
@@ -82,6 +88,7 @@ def explain(evidence_token: str) -> dict:
         llm_input = {
             "perspective": evidence["perspective"],
             "candidates": evidence["candidates"],
+            "boardState": evidence.get("boardState"),
             "limitations": evidence["limitations"],
         }
         explanation = _validate_llm_output(
