@@ -1,7 +1,14 @@
 import json
+import logging
+import urllib.error
 import urllib.request
 
 from app.config import OPENAI_API_KEY, OPENAI_MODEL, OPENAI_TIMEOUT_SECONDS
+
+
+logger = logging.getLogger(__name__)
+MAX_OUTPUT_TOKENS = 1200
+REASONING_EFFORT = "low"
 
 
 OUTPUT_SCHEMA = {
@@ -80,7 +87,8 @@ def request_explanation(evidence: dict) -> dict:
         "model": OPENAI_MODEL,
         "instructions": INSTRUCTIONS,
         "input": json.dumps(evidence, ensure_ascii=False),
-        "max_output_tokens": 500,
+        "max_output_tokens": MAX_OUTPUT_TOKENS,
+        "reasoning": {"effort": REASONING_EFFORT},
         "store": False,
         "text": {
             "format": {
@@ -100,13 +108,104 @@ def request_explanation(evidence: dict) -> dict:
         },
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=OPENAI_TIMEOUT_SECONDS) as response:
-        result = json.loads(response.read())
+    try:
+        with urllib.request.urlopen(request, timeout=OPENAI_TIMEOUT_SECONDS) as response:
+            http_status = response.status
+            try:
+                result = json.loads(response.read())
+            except json.JSONDecodeError:
+                logger.warning(
+                    "OpenAI Responses API returned invalid JSON: http_status=%s",
+                    http_status,
+                )
+                raise
+    except urllib.error.HTTPError as error:
+        logger.warning(
+            "OpenAI Responses API HTTP failure: http_status=%s",
+            error.code,
+        )
+        raise
 
-    for item in result.get("output", []):
-        if item.get("type") != "message":
+    return _parse_structured_output(result, http_status)
+
+
+def _safe_response_diagnostics(
+    result: dict,
+    http_status: int,
+    has_structured_output: bool = False,
+) -> dict:
+    output = result.get("output")
+    output_items = output if isinstance(output, list) else []
+    content_items = [
+        content
+        for item in output_items
+        if isinstance(item, dict)
+        for content in (
+            item.get("content") if isinstance(item.get("content"), list) else []
+        )
+        if isinstance(content, dict)
+    ]
+    usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
+    output_details = (
+        usage.get("output_tokens_details")
+        if isinstance(usage.get("output_tokens_details"), dict)
+        else {}
+    )
+    return {
+        "httpStatus": http_status,
+        "responseStatus": result.get("status"),
+        "incompleteReason": (
+            result.get("incomplete_details", {}).get("reason")
+            if isinstance(result.get("incomplete_details"), dict)
+            else None
+        ),
+        "outputItemTypes": [
+            item.get("type") for item in output_items if isinstance(item, dict)
+        ],
+        "contentItemTypes": [item.get("type") for item in content_items],
+        "hasRefusal": any(item.get("type") == "refusal" for item in content_items),
+        "hasOutputText": (
+            isinstance(result.get("output_text"), str)
+            or any(item.get("type") == "output_text" for item in content_items)
+        ),
+        "hasStructuredOutput": has_structured_output,
+        "outputTokens": usage.get("output_tokens"),
+        "reasoningTokens": output_details.get("reasoning_tokens"),
+    }
+
+
+def _parse_structured_output(result: dict, http_status: int) -> dict:
+    diagnostics = _safe_response_diagnostics(result, http_status)
+    if result.get("status") != "completed":
+        logger.warning(
+            "OpenAI Responses API returned no completed output: %s",
+            diagnostics,
+        )
+        raise ValueError("LLM response was not completed")
+
+    text_candidates = []
+    if isinstance(result.get("output_text"), str):
+        text_candidates.append(result["output_text"])
+    output = result.get("output")
+    for item in output if isinstance(output, list) else []:
+        if not isinstance(item, dict) or item.get("type") != "message":
             continue
         for content in item.get("content", []):
-            if content.get("type") == "output_text":
-                return json.loads(content["text"])
+            if isinstance(content, dict) and content.get("type") == "output_text":
+                text_candidates.append(content.get("text"))
+
+    for text_candidate in text_candidates:
+        if not isinstance(text_candidate, str):
+            continue
+        try:
+            structured_output = json.loads(text_candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(structured_output, dict):
+            return structured_output
+
+    logger.warning(
+        "OpenAI Responses API returned no structured output: %s",
+        diagnostics,
+    )
     raise ValueError("LLM response did not contain structured output")

@@ -74,7 +74,10 @@ def explain(evidence_token: str) -> dict:
             candidates[0].id,
         )
     except Exception as error:
-        logger.warning("LLM explanation failed; using template: %s", error)
+        logger.warning(
+            "LLM explanation failed; using template: error_type=%s",
+            type(error).__name__,
+        )
         source = "TEMPLATE"
         explanation = build_template(candidates)
 
