@@ -25,8 +25,9 @@ class FakeResponse:
 def test_llm_contract_prioritizes_hedged_go_interpretation():
     assert "현재 바둑판" in INSTRUCTIONS
     assert "승률과 집 차이를 문장으로 반복하지 말고" in INSTRUCTIONS
-    assert "3~5문장으로 짧고 자연스럽게" in INSTRUCTIONS
+    assert "summary와 comparison을 합친 전체 해설은 3~5문장" in INSTRUCTIONS
     assert "같은 의미를 반복하거나 불필요한 부연 설명" in INSTRUCTIONS
+    assert "전체 3~5문장 범위 안에서 1문장" in INSTRUCTIONS
     assert "바둑 선생님" in INSTRUCTIONS
     assert "자신의 바둑 지식을 적극적으로 사용" in INSTRUCTIONS
     assert "안형" in INSTRUCTIONS
